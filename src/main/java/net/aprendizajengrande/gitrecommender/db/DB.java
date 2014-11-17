@@ -252,6 +252,11 @@ public class DB {
 		PrintWriter pw = new PrintWriter(args[1] + ".ratings");
 		for (int author : db.commitCounts.keySet()) {
 			double totalCommits = db.commitCounts.get(author).intValue();
+			if (!db.counts.containsKey(author)) {
+				System.err.println("Skipping unknown author '"
+						+ db.authors.get(author) + "' (" + author + ")");
+				continue;
+			}
 			for (Map.Entry<Integer, Counter> c : db.counts.get(author)
 					.entrySet()) {
 				pw.println(author + "\t" + c.getKey() + "\t"

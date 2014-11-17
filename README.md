@@ -14,7 +14,7 @@ Current usage
 -------------
 
 *you need to have Mahout 1.0 installed from source in your local repo,
-configured for Hadoop 2.0*
+configured for Hadoop 2.0, see below*
 
 mvn clean package assembly:single
 
@@ -30,4 +30,14 @@ The Hadoop job Recommend will take a DB and produce recommendations using a Hado
 
 Finally, the "Experiment" class allows for single-node experimentation with the non-Hadoop recommenders in Mahout.
 
-   
+Installing Mahout from source
+-----------------------------
+
+$ git clone https://github.com/apache/mahout.git
+$ cd mahout
+$ mvn clean package -DskipTests -Drelease -Dmahout.skip.distribution=false -Dhadoop.profile=200 -Dhadoop2.version=2.4.1 -Dhbase.version=0.98.0-hadoop2
+
+Sample DB
+---------
+
+http://aprendizajengrande.net/material/linux_git_100k_commits.tar.bz2
