@@ -1,1 +1,9 @@
 /target
+/*.dat
+/*.files
+/*.ratings
+/*.users
+/recos
+/.classpath
+/.project
+/.settings
