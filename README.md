@@ -42,4 +42,4 @@ $ mvn clean package -DskipTests -Drelease -Dmahout.skip.distribution=false -Dhad
 Sample DB
 ---------
 
-http://aprendizajengrande.net/material/linux_git_100k_commits.tar.bz2
+http://aprendizajengrande.net/clases/material/linux_git_100k_commits.tar.bz2
