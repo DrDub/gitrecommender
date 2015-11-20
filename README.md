@@ -33,11 +33,13 @@ Finally, the "Experiment" class allows for single-node experimentation with the 
 Installing Mahout from source
 -----------------------------
 
+<pre>
 $ git clone https://github.com/apache/mahout.git
 $ cd mahout
 $ mvn clean package -DskipTests -Drelease -Dmahout.skip.distribution=false -Dhadoop.profile=200 -Dhadoop2.version=2.4.1 -Dhbase.version=0.98.0-hadoop2
+</pre>
 
 Sample DB
 ---------
 
-http://aprendizajengrande.net/material/linux_git_100k_commits.tar.bz2
+http://aprendizajengrande.net/clases/material/linux_git_100k_commits.tar.bz2
