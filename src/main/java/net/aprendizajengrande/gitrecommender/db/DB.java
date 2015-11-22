@@ -179,6 +179,10 @@ public class DB {
 		return result;
 	}
 
+	public Integer idFileOrNull(String file) {
+		return fileIds.get(file);
+	}
+
 	public void observeCommit(String commit, int author, List<Integer> files) {
 		this.lastCommit = commit;
 		commitCounts.get(author).inc();

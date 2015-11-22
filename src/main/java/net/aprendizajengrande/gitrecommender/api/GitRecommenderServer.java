@@ -22,11 +22,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,9 +39,16 @@ import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 
+import net.aprendizajengrande.gitrecommender.Recommend;
+import net.aprendizajengrande.gitrecommender.UpdateLog;
+
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jgit.api.CloneCommand;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -64,7 +74,7 @@ import org.json.JSONTokener;
  * 
  * { "repository": "https://github.com/fatiherikli/fil.git", "files" : [
  * "master/examples/hello.py", "gh-pages/index.html", "master/images/logo.png",
- * "blob/master/workers/opal.js" ] }
+ * "master/workers/opal.js" ] }
  * 
  * the output of the API will be { "recommendation" : [ { "file" :
  * "blob/master/workers/javascript.js", "score" : 0.3 }, { "file" :
@@ -109,25 +119,27 @@ public class GitRecommenderServer implements Servlet {
 
 	public void service(ServletRequest request, ServletResponse response)
 			throws ServletException, IOException {
-		InputStream is = request.getInputStream();
-		BufferedReader br = new BufferedReader(new InputStreamReader(is));
-
 		StringBuilder task = new StringBuilder();
-		try {
-			String line = br.readLine();
-			while (line != null) {
-				task.append(line).append('\n');
-				line = br.readLine();
+		{
+			InputStream is = request.getInputStream();
+			BufferedReader br = new BufferedReader(new InputStreamReader(is));
+			try {
+				String line = br.readLine();
+				while (line != null) {
+					task.append(line).append('\n');
+					line = br.readLine();
+				}
+			} catch (IOException e) {
+				error(response, e);
+				return;
 			}
-		} catch (IOException e) {
-			error(response, e);
-			return;
+			br.close();
 		}
 		String repositoryStr;
 		String[] filesStrArr;
 		try {
 			Object maybeObj = new JSONTokener(task.toString()).nextValue();
-			if (maybeObj instanceof JSONObject) {
+			if (!(maybeObj instanceof JSONObject)) {
 				error(response, "Expected: JSON object");
 				return;
 			} else {
@@ -156,23 +168,89 @@ public class GitRecommenderServer implements Servlet {
 			try {
 				// check whether the repo already has a folder
 				if (!repoToFolder.containsKey(repositoryStr)) {
-					// TODO create it
+					int id = repoToFolder.size();
+					File repoDir = new File(String.valueOf(id));
+					repoDir.mkdirs();
+					File dbDir = new File(repoDir, "db");
+					dbDir.mkdirs();
+					File gitDir = new File(repoDir, "git");
+
+					CloneCommand clone = Git.cloneRepository();
+					clone.setBare(true);
+					clone.setCloneAllBranches(true);
+					clone.setDirectory(gitDir).setURI(repositoryStr);
+					clone.call();
+
+					setTimeStamp(repoDir, 0L);
+
+					repoToFolder.put(repositoryStr, repoDir);
 					save();
 				}
 
+				// check whether the repo has been updated today
+				File repoDir = repoToFolder.get(repositoryStr);
 				boolean updated = false;
-				// TODO check whether the repo has been updated today
+				long timestamp = getTimeStamp(repoDir);
+				updated = System.currentTimeMillis() - timestamp < 24 * 60 * 60 * 1000L;
 				if (!updated) {
-					// TODO call to UpdateLog
-					save();
+					File gitDir = new File(repoDir, "git");
+					File dbDir = new File(repoDir, "db");
+
+					// update repo
+					FileRepositoryBuilder builder = new FileRepositoryBuilder();
+					Repository repository = builder.setGitDir(gitDir)
+							.readEnvironment().findGitDir().build();
+
+					Git git = new Git(repository);
+					git.pull();
+
+					// call to UpdateLog
+					UpdateLog.main(new String[] { gitDir.getAbsolutePath(),
+							dbDir.getAbsolutePath() });
+
+					setTimeStamp(repoDir);
 				}
 
-				// TODO call to Recommend, get recos
+				// call to Recommend, get recos
+				File dbDir = new File(repoDir, "db");
+				File tmpInput = File.createTempFile("gitrecommender-input",
+						"tmp");
+				File tmpOutput = File.createTempFile("gitrecommender-output",
+						"");
+				File tmpOutputDir = new File(tmpOutput.getAbsolutePath()
+						+ ".dir");
+				tmpOutputDir.mkdirs();
+				File outputFile = new File(repoDir, "recos");
+
+				File taskFile = new File(repoDir, "task");
+				PrintWriter pw = new PrintWriter(new FileWriter(taskFile));
+				for (String fileStr : filesStrArr)
+					pw.println(fileStr.replaceFirst("[^/]+/", ""));
+				pw.close();
+
+				deleteTemp();
+				Recommend.main(new String[] { dbDir.getAbsolutePath(),
+						tmpInput.toURI().toString(),
+						tmpOutputDir.toURI().toString(),
+						outputFile.getAbsolutePath(),
+						taskFile.getAbsolutePath() });
 
 				JSONObject result = new JSONObject();
 				JSONArray recos = new JSONArray();
 
-				// TODO fill in recos
+				// fill in recos
+				BufferedReader br = new BufferedReader(new FileReader(
+						outputFile));
+				String line = br.readLine();
+				while (line != null) {
+					String[] parts = line.split("\\t");
+					JSONObject entry = new JSONObject();
+					entry.put("file", parts[1]);
+					entry.put("score", Float.parseFloat(parts[2]));
+					recos.put(entry);
+					line = br.readLine();
+				}
+				br.close();
 
 				result.put("recommendation", recos);
 
@@ -182,6 +260,39 @@ public class GitRecommenderServer implements Servlet {
 				e.printStackTrace(response.getWriter());
 			}
 		}
+	}
+
+	private void deleteTemp() throws IOException {
+		File temp = new File("temp");
+		if (temp.exists()) {
+			// renaming it to avoid error-prone recursive deletion
+			temp.renameTo(new File(File
+					.createTempFile("gitrecommender-tmp", "", new File(".")).getAbsolutePath()
+					+ ".dir"));
+		}
+	}
+
+	private void setTimeStamp(File repoDir, long i) throws IOException {
+		PrintWriter pw = new PrintWriter(new FileWriter(new File(repoDir,
+				"timestamp")));
+		pw.println(i);
+		pw.close();
+	}
+
+	private void setTimeStamp(File repoDir) throws IOException {
+		setTimeStamp(repoDir, System.currentTimeMillis());
+	}
+
+	private long getTimeStamp(File repoDir) throws IOException {
+		File timestampFile = new File(repoDir, "timestamp");
+		if (!timestampFile.exists())
+			return 0L;
+		BufferedReader br = new BufferedReader(new FileReader(timestampFile));
+		String line = br.readLine();
+		br.close();
+		if (line == null)
+			return 0L;
+		return Long.parseLong(line);
 	}
 
 	private static Object lock = new Object();
@@ -208,6 +319,11 @@ public class GitRecommenderServer implements Servlet {
 	}
 
 	public static void main(String[] args) throws Exception {
+		if (args.length != 1) {
+			System.err.println("Usage: GitRecommenderServer <port number>");
+			System.exit(-1);
+		}
+
 		load();
 		Server server = new Server(Integer.valueOf(args[0]));
 		ServletHolder holder = new ServletHolder(new GitRecommenderServer());
