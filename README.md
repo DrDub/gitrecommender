@@ -28,6 +28,10 @@ The Hadoop job Recommend will take a DB and produce recommendations using a Hado
 
 Finally, the "Experiment" class allows for single-node experimentation with the non-Hadoop recommenders in Mahout.
 
+Alternatively, the "Recommend" main will use a hadoop cluster with the Mahout itembasedrecommender:
+
+java -cp ./target/gitrecommender-0.0.2-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.Recommend /path/to/db /hdfs/folder/for/input /hdfs/folder/for/output /path/to/output/file
+
 Sample DB
 ---------
 
