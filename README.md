@@ -16,11 +16,11 @@ Current usage
 
 mvn clean package assembly:single
 
-java -cp ./target/gitrecommender-0.0.2-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.UpdateLog /path/to/.git /path/to/db
+java -cp ./target/gitrecommender-0.0.3-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.UpdateLog /path/to/.git /path/to/db
 
 (consumes git history and updates a local DB)
 
-java -cp ./target/gitrecommender-0.0.2-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.db.DB /path/to/db /path/to/recos/suffix
+java -cp ./target/gitrecommender-0.0.3-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.db.DB /path/to/db /path/to/recos/suffix
 
 (creates input files for Mahout itembasedrecommender)
 
@@ -30,7 +30,7 @@ Finally, the "Experiment" class allows for single-node experimentation with the 
 
 Alternatively, the "Recommend" main will use a hadoop cluster with the Mahout itembasedrecommender:
 
-java -cp ./target/gitrecommender-0.0.2-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.Recommend /path/to/db /hdfs/folder/for/input /hdfs/folder/for/output /path/to/output/file
+java -cp ./target/gitrecommender-0.0.3-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.Recommend /path/to/db /hdfs/folder/for/input /hdfs/folder/for/output /path/to/output/file
 
 Sample DB
 ---------
@@ -42,7 +42,7 @@ API Demo Server
 
 A very inefficient, very slow demo API server is provided, follow the instructions about to obtain a fat jar, then launch a server:
 
-java -cp ./target/gitrecommender-0.0.2-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.api.GitRecommenderServer 8088
+java -cp ./target/gitrecommender-0.0.3-SNAPSHOT-jar-with-dependencies.jar net.aprendizajengrande.gitrecommender.api.GitRecommenderServer 8088
 
 This will launch the server listening to the port 8088
 
