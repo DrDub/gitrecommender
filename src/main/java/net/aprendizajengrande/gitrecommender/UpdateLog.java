@@ -1,6 +1,6 @@
 /*
  *   This file is part of gitrecommender
- *   Copyright (C) 2014 Pablo Duboue <pablo.duboue@gmail.com>
+ *   Copyright (C) 2014-2019 Pablo Duboue <pablo.duboue@gmail.com>
  * 
  *   gitrecommender is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as 
@@ -22,6 +22,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.aprendizajengrande.gitrecommender.db.DB;
 
@@ -50,22 +53,22 @@ public class UpdateLog {
 		File gitDir = new File(args[0]);
 		File dbDir = new File(args[1]);
 
-		DB db = new DB(dbDir);
+		final DB db = new DB(dbDir);
 
 		System.out.println("Git dir: " + gitDir);
 		System.out.println("DB dir: " + dbDir);
 
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
 		// scan environment GIT_* variables
-		Repository repository = builder.setGitDir(gitDir).readEnvironment()
+		final Repository repository = builder.setGitDir(gitDir).readEnvironment()
 				.findGitDir() // scan up the file system tree
 				.build();
 
-		Git git = new Git(repository);
+		final Git git = new Git(repository);
 		Iterable<RevCommit> log = git.log().call();
 
 		// go through all commits and process them in reverse order
-		List<RevCommit> allCommits = new ArrayList<RevCommit>();
+		final List<RevCommit> allCommits = new ArrayList<RevCommit>();
 
 		int newCommits = 0;
 		boolean seen = false;
@@ -84,37 +87,83 @@ public class UpdateLog {
 
 		int commitNum = 0;
 		List<Integer> files = new ArrayList<Integer>();
+                long start = System.currentTimeMillis();
+                
+		int cpus = Runtime.getRuntime().availableProcessors();
+		ExecutorService threadPool = Executors.newFixedThreadPool(cpus);
+
+                final AtomicInteger runningTasks = new AtomicInteger(0);
+                
 		for (int i = newCommits - 1; i >= 0; i--) {
-			if (commitNum % 500 == 0)
-				db.save();
-
-			RevCommit commit = allCommits.get(i);
-
-			String author = commit.getAuthorIdent().getName();
-			int authorId = db.idAuthor(author);
-
-			files.clear();
-
-			if (i < allCommits.size() - 1) {
-				AbstractTreeIterator oldTreeParser = prepareTreeParser(
-						repository, allCommits.get(i + 1));
-				AbstractTreeIterator newTreeParser = prepareTreeParser(
-						repository, commit);
-				// then the procelain diff-command returns a list of diff
-				// entries
-				List<DiffEntry> diff = git.diff().setOldTree(oldTreeParser)
-						.setNewTree(newTreeParser).call();
-				for (DiffEntry entry : diff) {
-					// System.out.println("\tFile: " + entry.getNewPath());
-					String file = entry.getNewPath();
-					files.add(db.idFile(file));
-				}
+                    commitNum++;
+                    
+                    if (commitNum % 1000 == 0) {
+                        while(runningTasks.get() > 0){
+				Thread.sleep(100);
+				continue;
 			}
-			db.observeCommit(commit.name(), authorId, files);
+                        long end = System.currentTimeMillis();
+                        System.out.println("Processed " + commitNum + " commits out of " + newCommits + " in " + ( (end - start) / 1000 ) + " secs.");
+                        if (commitNum % 10000 == 0) {
+                            synchronized(db){
+                                db.save();
+                            }
+                        }
+                    }
+                    final int commitIdx = i;
+                    
+                    runningTasks.incrementAndGet();
+                    threadPool.submit(new Runnable() {
+                            public void run() {
+                                try {
+                                    RevCommit commit = allCommits.get(commitIdx);
+
+                                    List<String> fileNames = new ArrayList<String>(); // TODO: move to threadlocal
+
+                                    if (commitIdx < allCommits.size() - 1) {
+                                        AbstractTreeIterator oldTreeParser = prepareTreeParser(
+                                                                                               repository, allCommits.get(commitIdx + 1));
+                                        AbstractTreeIterator newTreeParser = prepareTreeParser(
+                                                                                               repository, commit);
+                                        // then the procelain diff-command returns a list of diff entries
+                                        List<DiffEntry> diff = git.diff().setOldTree(oldTreeParser)
+                                            .setNewTree(newTreeParser).call();
+                                        for (DiffEntry entry : diff) {
+                                            // System.out.println("\tFile: " + entry.getNewPath());
+                                            String file = entry.getNewPath();
+                                            fileNames.add(file);
+                                        }
+                                    }
+                                    synchronized(db){
+                                        String author = commit.getAuthorIdent().getName();
+                                        int authorId = db.idAuthor(author);
+                                        List<Integer> files = new ArrayList<Integer>(fileNames.size()); // TODO: move to threadlocal
+                                        for(String file : fileNames)
+                                            files.add(db.idFile(file));
+                                        
+                                        db.observeCommit(commit.name(), authorId, files);
+                                    }
+                                } catch (Exception exc) {
+                                    exc.printStackTrace();
+                                }
+
+                                runningTasks.decrementAndGet();
+                            }
+			});
+
 		}
 
-		db.save();
+                while(runningTasks.get() > 0){
+                    Thread.sleep(100);
+                    continue;
+                }
+                synchronized(db){
+                    db.save();
+                }
+		threadPool.shutdown();
 		repository.close();
+                long end = System.currentTimeMillis();
+                System.out.println("Import took: " + ( (end - start) / 1000 ) + " secs.");
 	}
 
 	private static AbstractTreeIterator prepareTreeParser(

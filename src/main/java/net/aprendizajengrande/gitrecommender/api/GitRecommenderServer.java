@@ -108,6 +108,7 @@ public class GitRecommenderServer implements Servlet {
 		JSONObject msgObj = new JSONObject();
 		msgObj.put("msg", msg);
 		obj.put("error", msgObj);
+		System.err.println("Error: " + msg);
 		response.setContentType("application/json");
 		response.getWriter().println(obj.toString());
 	}
@@ -163,6 +164,9 @@ public class GitRecommenderServer implements Servlet {
 			error(response, e);
 			return;
 		}
+
+		System.err.println("Got: " + repositoryStr + " for "
+				+ java.util.Arrays.asList(filesStrArr));
 
 		synchronized (lock) {
 			try {
@@ -254,6 +258,8 @@ public class GitRecommenderServer implements Servlet {
 
 				result.put("recommendation", recos);
 
+				System.err.println("Send: " + result.toString());
+
 				response.setContentType("application/json");
 				response.getWriter().println(result.toString());
 			} catch (Exception e) {
@@ -266,8 +272,8 @@ public class GitRecommenderServer implements Servlet {
 		File temp = new File("temp");
 		if (temp.exists()) {
 			// renaming it to avoid error-prone recursive deletion
-			temp.renameTo(new File(File
-					.createTempFile("gitrecommender-tmp", "", new File(".")).getAbsolutePath()
+			temp.renameTo(new File(File.createTempFile("gitrecommender-tmp",
+					"", new File(".")).getAbsolutePath()
 					+ ".dir"));
 		}
 	}

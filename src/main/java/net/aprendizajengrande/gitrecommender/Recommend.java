@@ -56,7 +56,6 @@ public class Recommend {
 		conf.set("fs.file.impl",
 				org.apache.hadoop.fs.LocalFileSystem.class.getName());
 
-
 		FileSystem hdfs = FileSystem.get(conf);
 
 		// delete leftover temp folder from previous run
@@ -102,8 +101,11 @@ public class Recommend {
 			int pos = 0;
 			while (line != null) {
 				Integer fileId = db.idFileOrNull(line);
-				pw.println(extraAuthor + "\t" + fileId + "\t10000.0\t" + pos);
-				pos++;
+				if (fileId != null) {
+					pw.println(extraAuthor + "\t" + fileId + "\t100.0\t"
+							+ pos);
+					pos++;
+				}
 				line = br.readLine();
 			}
 			br.close();
@@ -112,9 +114,24 @@ public class Recommend {
 		pw.close();
 
 		// compute recommendation in Hadoop
-		ToolRunner.run(new Configuration(), new RecommenderJob(), new String[] {
-				"--input", inputName, "--output", outputName,
-				"--similarityClassname", "SIMILARITY_COSINE" });
+		String[] options = new String[] { "--input", inputName, "--output",
+				outputName, "--similarityClassname", "SIMILARITY_COSINE",
+				"--minPrefsPerUser", "0", "--booleanData", "1" };
+		if (args.length == 5) {
+			String inputNameExtraId = inputName + ".extraId";
+			Path inputExtraId = new Path(inputNameExtraId);
+			fsdos = input.getFileSystem(conf).create(inputExtraId);
+			pw = new PrintWriter(new OutputStreamWriter(fsdos));
+			pw.println(authorCommitCounts.length);
+			pw.close();
+			String[] newOptions = new String[options.length + 2];
+			System.arraycopy(options, 0, newOptions, 0, options.length);
+			newOptions[options.length] = "--usersFile";
+			newOptions[options.length + 1] = inputNameExtraId;
+			options = newOptions;
+		}
+
+		ToolRunner.run(new Configuration(), new RecommenderJob(), options);
 
 		// read recommendations
 		FSDataInputStream fsdis = output.getFileSystem(conf).open(actualOutput);
